@@ -6,24 +6,31 @@ on:
 
 jobs:
   build:
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
-      - name: Login to docker hub
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }} 
-      - name: Build docker image
-        run: docker build -t tagore555/node-app .
-      - name: Publish image to docker hub
+      - name: Login to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build Docker image
+        run: docker build -t tagore555/node-app:latest .
+      - name: Publish image to Docker Hub
         run: docker push tagore555/node-app:latest
-        
+
   deploy:
     needs: build
-    runs-on: [aws-ec2]
+    runs-on: ubuntu-latest  # Change this if you are using a self-hosted runner
     steps:
-      - name: Pull image from docker hub
-        run: docker pull tagore555/node-app:latest
-      - name: Delete old container
-        run: docker rm -f nodejs-app-container
-      - name: Run docker container
-        run: docker run -d --name nodejs-app-container tagore555/node-app
+      - name: Install SSH client
+        run: sudo apt-get install -y sshpass
+      - name: Deploy to EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          sshpass -p $SSH_KEY ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
+            docker pull tagore555/node-app:latest || true
+            docker rm -f nodejs-app-container || true
+            docker run -d --name nodejs-app-container tagore555/node-app:latest
+          EOF
